@@ -66,8 +66,8 @@ Inverse-transform `U(0,1)` draws `(n, dim)` to uniform marginals on
 
 ### `sample_mean(x)`
 
-Arithmetic mean of a 1-D array, written out explicitly
-(`sum(x)/n`); tested to agree with `numpy.mean` on identical samples.
+Arithmetic mean of a finite nonempty 1-D array. Uses a shifted origin
+before summation; tested against `numpy.mean` on identical samples.
 
 ### `sample_variance(x, ddof=1)`
 
@@ -82,7 +82,13 @@ arrays, `f_ab` is the `(dim, n)` stack of crossed outputs. Return
 
 ### `saltelli_indices(f_a, f_b, f_ab)`
 
-Both families in one pass; returns `(S, T, mean, variance)`.
+Both families in one pass; returns `(S, T, mean, variance)`. All output
+families use one common pooled A/B center. Variance is the centered pooled
+population estimate (denominator 2n). Results are not clipped. Nonfinite,
+wrong-shape or empty-dimension data raises ValueError; zero/under-resolved
+variance also raises ValueError. Nonrepresentable centered moments/indices
+raises FloatingPointError. Offsets and nonzero scales cancel up to rounding
+already present in the supplied data.
 
 ---
 
@@ -95,7 +101,8 @@ Full analysis at base sample size `n`:
 * draws the `(k+2)n` Saltelli design (`k = number of bounds rows`),
 * evaluates `model` (a vectorised `(n, k) -> (n,)` callable),
 * computes `S`, `T` plus bootstrap standard errors and 95% percentile
-  intervals.
+  intervals. Every replicate reuses `saltelli_indices`; fewer than two
+  nondegenerate bootstrap replicates raises ValueError.
 
 Pass either an integer `seed` (recommended; everything is then exactly
 reproducible) or a pre-built Generator `rng` (used internally to thread
@@ -130,8 +137,9 @@ mismatch.
 
 ## Validation guarantees
 
-Every public entry point validates its arguments through
-`variance_compass.validation`: integer-ness and positivity of sizes,
-`low < high` bounds, finiteness everywhere, `rng`/`seed` types, model
-callability and output shape. Failure modes are `TypeError` /
-`ValueError` with explicit messages (see the validation tests).
+Drivers validate model callability, integer sample/bootstrap sizes,
+finite ordered bounds, generator/seed types and model-output shape/finiteness.
+Estimators validate their documented arrays and positive variance. Model
+functions check their shapes and parameters. `index_errors` checks matching
+shapes. See tests for each supported failure contract; these checks do not
+establish scientific correctness of user-supplied models.

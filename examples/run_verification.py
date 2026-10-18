@@ -101,7 +101,7 @@ def make_cover(path: Path) -> None:
     fig = plt.figure(figsize=(6.2, 5.0))
     ax = fig.add_subplot(projection="3d")
     surf = ax.plot_surface(
-        X1, X2, F, cmap="viridis", linewidth=0, antialiased=True,
+        X1, X2, F, cmap="viridis", linewidth=0, edgecolor="none", antialiased=False,
         rstride=2, cstride=2,
     )
     for axis in (ax.xaxis, ax.yaxis, ax.zaxis):
@@ -121,90 +121,102 @@ def make_cover(path: Path) -> None:
     plt.close(fig)
 
 
-def _draw_axes(ax, n_values, S, T, S_se, T_se, S_true, T_true, upto, title):
-    """Shared drawing routine for the static plot and every GIF frame."""
-    for i in range(3):
-        c = COLORS[i]
-        ax.fill_between(
-            n_values[:upto],
-            S[:upto, i] - 2 * S_se[:upto, i],
-            S[:upto, i] + 2 * S_se[:upto, i],
-            color=c,
-            alpha=0.16,
-            linewidth=0,
-        )
-        ax.plot(
-            n_values[:upto], S[:upto, i], "o-", color=c, ms=3.6, lw=1.3,
-            label=f"$S_{{{i + 1}}}$ estimate",
-        )
-        ax.plot(
-            n_values[:upto], T[:upto, i], "^--", color=c, ms=4.0, lw=1.1,
-            mfc="none", label=f"$T_{{{i + 1}}}$ estimate",
-        )
-        ax.axhline(S_true[i], color=c, ls=":", lw=1.0)
-        ax.axhline(T_true[i], color=c, ls=":", lw=1.0, alpha=0.55)
-    ax.set_xscale("log", base=2)
-    ax.set_xlim(n_values[0] * 0.85, n_values[-1] * 1.18)
-    ax.set_ylim(-0.09, 0.88)
-    ax.set_xlabel(XLABEL)
-    ax.set_ylabel(YLABEL)
-    ax.set_title(title)
-    ax.grid(False)
-    ax.legend(ncol=3, fontsize=8, loc="upper right", frameon=False)
-    ax.annotate(
-        "dotted: analytic value",
-        xy=(0.02, 0.03),
-        xycoords="axes fraction",
-        fontsize=8,
-        color="0.35",
-    )
+def _draw_pair(axes, sweep, S_true, T_true, upto):
+    low = min(np.min(sweep.S_matrix-2*sweep.S_se_matrix), np.min(sweep.T_matrix-2*sweep.T_se_matrix), 0)
+    high = max(np.max(sweep.S_matrix+2*sweep.S_se_matrix), np.max(sweep.T_matrix+2*sweep.T_se_matrix), 1)
+    for ax, values, se, reference, symbol, title in (
+        (axes[0],sweep.S_matrix,sweep.S_se_matrix,S_true,"S","First-order effects"),
+        (axes[1],sweep.T_matrix,sweep.T_se_matrix,T_true,"T","Total effects, including interactions")):
+        ax.clear()
+        for i,color in enumerate(COLORS):
+            ax.errorbar(sweep.n_values[:upto],values[:upto,i],yerr=2*se[:upto,i],
+                        fmt="o-",color=color,ms=3,lw=1,elinewidth=.6,capsize=1.5,label=f"{symbol}{i+1}: input x{i+1}")
+            ax.axhline(reference[i],color=color,ls=":",lw=1)
+        ax.set(xscale="log",xlim=(sweep.n_values[0]*.8,sweep.n_values[-1]*1.25),
+               ylim=(low-.05,high+.05),xlabel="Base sample size N (log scale)",ylabel="Index estimate",title=title)
+        ax.legend(loc="upper right",fontsize=8,frameon=False)
+        ax.grid(False)
 
 
-def make_convergence_plot(path, sweep, S_true, T_true) -> None:
-    n_values = sweep.n_values
-    fig, ax = plt.subplots(figsize=(6.7, 4.5))
-    _draw_axes(
-        ax,
-        n_values,
-        sweep.S_matrix,
-        sweep.T_matrix,
-        sweep.S_se_matrix,
-        sweep.T_se_matrix,
-        S_true,
-        T_true,
-        upto=len(n_values),
-        title="Ishigami: Saltelli index convergence vs analytic ground truth",
-    )
-    fig.tight_layout()
-    fig.savefig(path, dpi=180)
+def make_convergence_plot(path,sweep,S_true,T_true):
+    fig,axes=plt.subplots(1,2,figsize=(11,5.5))
+    fig.subplots_adjust(left=.07,right=.97,bottom=.18,top=.81,wspace=.23)
+    _draw_pair(axes,sweep,S_true,T_true,len(sweep.results))
+    fig.suptitle("Ishigami sensitivity convergence · centered covariance estimates",fontsize=13)
+    fig.text(.5,.035,"Dotted: analytic reference · whiskers: ±2 bootstrap SE (not exact 95% coverage)",ha="center",fontsize=9)
+    fig.savefig(path,dpi=150)
     plt.close(fig)
 
 
-def make_convergence_gif(path, sweep, S_true, T_true) -> int:
-    """One real frame per sample size; frames replay the recorded sweep."""
-    n_values = sweep.n_values
-    frames = len(n_values)
-    S, T = sweep.S_matrix, sweep.T_matrix
-    S_se, T_se = sweep.S_se_matrix, sweep.T_se_matrix
-    fig, ax = plt.subplots(figsize=(8.4, 5.2), dpi=126)
-
-    def draw(t):
-        ax.clear()
-        _draw_axes(
-            ax, n_values, S, T, S_se, T_se, S_true, T_true, upto=t + 1,
-            title=(
-                "Ishigami: Saltelli estimator convergence   "
-                f"$N$ = {n_values[t]:,} ($2^{{{np.log2(n_values[t]):.1f}}}$)"
-                f"   frame {t + 1}/{frames}"
-            ),
-        )
-        fig.tight_layout()
-        return []
-
-    anim = FuncAnimation(fig, draw, frames=frames, interval=150)
-    anim.save(str(path), writer=PillowWriter(fps=7))
+def make_convergence_gif(path,sweep,S_true,T_true):
+    fig,axes=plt.subplots(1,2,figsize=(11,6),dpi=100)
+    fig.subplots_adjust(left=.07,right=.97,bottom=.17,top=.80,wspace=.23)
+    frames=len(sweep.results)
+    title=fig.suptitle("",fontsize=12)
+    fig.text(.5,.035,"Recorded independent designs · dotted: analytic · whiskers: ±2 bootstrap SE",ha="center",fontsize=9)
+    writer=PillowWriter(fps=7)
+    with writer.saving(fig,path,dpi=100):
+        for i,result in enumerate(sweep.results):
+            _draw_pair(axes,sweep,S_true,T_true,i+1)
+            title.set_text(f"Ishigami sensitivity · N = {result.n:,} · {5*result.n:,} model evaluations\nFrame {i+1}/{frames} · 100 row-bootstrap replicates")
+            writer.grab_frame()
     plt.close(fig)
     return frames
+
+
+def affine_benchmark():
+    from variance_compass.estimators import saltelli_indices
+    from variance_compass.sampling import saltelli_matrices
+    a,b,crossed=saltelli_matrices(8192,2,np.random.default_rng(10))
+    model=additive_model((1.,1.))
+    fa,fb=model(2*a-1),model(2*b-1)
+    fab=np.vstack([model(2*x-1) for x in crossed])
+    base_s,base_t,_,_=saltelli_indices(fa,fb,fab)
+    rows=[]
+    for offset in (0.,1.,100.,1000.,1e6,1e8):
+        aa,bb,cc=fa+offset,fb+offset,fab+offset
+        stable_s,stable_t,_,variance=saltelli_indices(aa,bb,cc)
+        f0=.5*(aa.mean()+bb.mean())
+        old_v=.5*(np.mean(aa*aa)+np.mean(bb*bb))-f0*f0
+        if old_v>0:
+            old_s=(cc@bb/aa.size-f0*f0)/old_v
+            old_t=1-(cc@aa/aa.size-f0*f0)/old_v
+        else:
+            old_s=old_t=np.full(2,np.nan)
+        rows.append({"offset":offset,"centered_S1":stable_s[0],"centered_S2":stable_s[1],
+                     "centered_T1":stable_t[0],"centered_T2":stable_t[1],"centered_variance":variance,
+                     "legacy_S1":old_s[0],"legacy_S2":old_s[1],"legacy_T1":old_t[0],"legacy_T2":old_t[1],
+                     "legacy_variance":old_v,"max_centered_index_drift":float(max(np.max(abs(stable_s-base_s)),np.max(abs(stable_t-base_t))))})
+    with (RESULTS_DIR/"affine_invariance.csv").open("w",newline="",encoding="utf-8") as stream:
+        writer=csv.DictWriter(stream,fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+    fig,axes=plt.subplots(1,2,figsize=(11,4.8))
+    offsets=np.array([r["offset"] for r in rows])
+    axes[0].plot(offsets,[r["legacy_S1"] for r in rows],"o--",color="#B06024",label="Prior raw moments")
+    axes[0].plot(offsets,[r["centered_S1"] for r in rows],"o-",color=COLORS[0],label="Common-centered")
+    axes[0].axhline(.5,color="black",ls=":",lw=1,label="Analytic S1 = 0.5")
+    axes[0].set(xscale="symlog",yscale="symlog",xlabel="Added output constant",ylabel="Estimated first-order index S1",title="Same 8,192-point design, different output zero")
+    axes[0].legend(fontsize=8,frameon=False,loc="lower left")
+    prior_base=np.array([rows[0]["legacy_S1"],rows[0]["legacy_S2"],rows[0]["legacy_T1"],rows[0]["legacy_T2"]])
+    old_drift=[max(abs(np.array([r["legacy_S1"],r["legacy_S2"],r["legacy_T1"],r["legacy_T2"]])-prior_base)) for r in rows]
+    axes[1].plot(offsets,np.maximum(old_drift,1e-16),"o--",color="#B06024",label="Prior raw moments")
+    axes[1].plot(offsets,np.maximum([r["max_centered_index_drift"] for r in rows],1e-16),"o-",color=COLORS[0],label="Common-centered")
+    axes[1].set(xscale="symlog",yscale="log",xlabel="Added output constant",ylabel="Maximum index change from offset zero",title="Translation invariance to data-rounding precision")
+    axes[1].legend(fontsize=8,frameon=False,loc="upper left")
+    for ax in axes:
+        ax.set_xlim(-0.1,1.5e8)
+        ax.set_xticks([0,100,1e4,1e6,1e8],["0","10²","10⁴","10⁶","10⁸"])
+    axes[0].set_ylim(-1e6,1)
+    fig.tight_layout(rect=(0,.04,1,.92))
+    fig.suptitle("An output offset must not change sensitivity · additive model, seed 10",fontsize=12)
+    fig.text(.5,.02,"Raw values saved in CSV; right-panel display floor 1e−16. No index clipping.",ha="center",fontsize=9)
+    fig.savefig(RESULTS_DIR/"affine_invariance.png",dpi=150)
+    plt.close(fig)
+    return {"model":"x1+x2, independent U(-1,1)","n":8192,"seed":10,
+            "max_centered_index_drift":max(r["max_centered_index_drift"] for r in rows),
+            "offset_1000":{k:float(v) for k,v in rows[3].items()},
+            "offset_1e8":{k:float(v) for k,v in rows[-1].items()}}
 
 
 def write_csv(path, sweep) -> None:
@@ -216,16 +228,18 @@ def write_csv(path, sweep) -> None:
             + [f"T{i + 1}" for i in range(3)]
             + [f"S{i + 1}_se" for i in range(3)]
             + [f"T{i + 1}_se" for i in range(3)]
+            + [f"{family}{i+1}_ci_{end}" for family in ("S","T") for i in range(3) for end in ("low","high")]
             + ["mean", "variance", "runtime_s"]
         )
         for r in sweep.results:
             writer.writerow(
                 [int(r.n), int(r.n * (r.dim + 2))]
-                + [f"{v:.6f}" for v in r.S]
-                + [f"{v:.6f}" for v in r.T]
-                + [f"{v:.6f}" for v in r.S_se]
-                + [f"{v:.6f}" for v in r.T_se]
-                + [f"{r.mean:.6f}", f"{r.variance:.6f}", f"{r.runtime_s:.3f}"]
+                + [f"{v:.12g}" for v in r.S]
+                + [f"{v:.12g}" for v in r.T]
+                + [f"{v:.12g}" for v in r.S_se]
+                + [f"{v:.12g}" for v in r.T_se]
+                + [f"{x:.12g}" for ci in (r.S_ci,r.T_ci) for pair in ci for x in pair]
+                + [f"{r.mean:.12g}", f"{r.variance:.12g}", f"{r.runtime_s:.3f}"]
             )
 
 
@@ -290,6 +304,10 @@ def main() -> None:
     )
     print("done")
 
+    affine = affine_benchmark()
+    api_result = analyze_sensitivity(ishigami,2**16,ishigami_bounds(),seed=SEED,n_bootstrap=100)
+    test_result = analyze_sensitivity(ishigami,2**17,ishigami_bounds(),seed=SEED,n_bootstrap=200)
+    test_anchor = analyze_sensitivity(additive_model(ANCHOR_COEFFS),2**17,additive_bounds(4),seed=ANCHOR_SEED,n_bootstrap=100)
     final = sweep.results[-1]
     errors = index_errors(final.S, final.T, S_true, T_true)
     runtime = time.perf_counter() - t_start
@@ -316,6 +334,10 @@ def main() -> None:
         "runtime_seconds": round(runtime, 3),
         "sweep_seconds": round(sweep_seconds, 3),
         "gif_seconds": round(gif_seconds, 3),
+        "affine_invariance":affine,
+        "api_example":api_result.to_dict(),
+        "test_fixture_ishigami":test_result.to_dict(),
+        "test_fixture_additive":test_anchor.to_dict(),
         "ishigami": {
             "a": ISHIGAMI_A,
             "b": ISHIGAMI_B,
@@ -336,6 +358,8 @@ def main() -> None:
             },
             "variance_estimate": final.variance,
             "variance_relative_error": final.variance / analytic.variance - 1.0,
+            "first_n_all_later_indices_within_0p02": next((int(sweep.n_values[i]) for i in range(len(sweep.results))
+                if all(np.max(abs(r.S-S_true))<.02 and np.max(abs(r.T-T_true))<.02 for r in sweep.results[i:])),None),
             "first_n_all_indices_within_0p02": (
                 min(below_002) if below_002 else None
             ),

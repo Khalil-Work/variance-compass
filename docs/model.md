@@ -47,7 +47,7 @@ V = sum_i V_i + sum_{i<j} V_{ij} + ...   (over all interaction orders),
 ```
 
 with `V_i = Var(E[f | X_i])` and, for any subset `u` of inputs,
-`V_u = Var( E[f | X_u] - sum_{v proper subset of u} f_v ] )`. Two
+`V_u = Var( E[f | X_u] - sum_{v proper subset of u} f_v )`. Two
 conditional-variance identities (the law of total variance) define the
 two index families used in this package:
 
@@ -77,54 +77,59 @@ domain `[low_j, high_j]` are produced by inverse transform,
 Total cost: `n * (k + 2)` model evaluations, and both index families
 come out of the same design.
 
-The estimators are the correlation ("matrix") form derived directly
-from the design structure. Write
+The implemented estimators are common-centered covariance estimates.
+The shared columns of the design give the population identities
 
-```
-f0_hat  = ( mean(f_a) + mean(f_b) ) / 2
-V_hat   = ( mean(f_a^2) + mean(f_b^2) ) / 2 - f0_hat^2
-```
-
-(the symmetric pooled variance estimate). Then
-
-```
-S_hat_i = ( mean_j( f_b[j] * f_ab[i][j] ) - f0_hat^2 ) / V_hat
-T_hat_i = 1 - ( mean_j( f_a[j] * f_ab[i][j] ) - f0_hat^2 ) / V_hat
+```text
+E[(f(B)−μ)(f(A_B^i)−μ)] = V_i
+E[(f(A)−μ)(f(A_B^i)−μ)] = V−V_total_i,
 ```
 
-**Why these work.** Row `j` of `B` and row `j` of `A_B^(i)` share
-exactly one input: the transplanted `X_i = B[j, i]`. All other inputs
-are independent copies, so
+where μ=E[f]. Conditioning on the shared X_i makes the first expression
+Var(E[f|X_i]); conditioning on all inputs except X_i gives the second.
+These identities motivate the following finite-sample plug-in estimator:
 
-```
-E[ f(B_j) * f(A_B^(i)_j) ] = f_0^2 + V_i,
-```
-
-because conditioning on the shared `X_i` gives
-`E[f | X_i] * E[f | X_i]` plus zero cross terms; expanding
-`E[ E[f|X_i]^2 ] = f_0^2 + V_i`. Similarly row `j` of `A` and row `j`
-of `A_B^(i)` share every input *except* `X_i` (all of `A`'s columns
-other than `i`), so
-
-```
-E[ f(A_j) * f(A_B^(i)_j) ] = f_0^2 + V - V_{~i},
+```text
+m       = (mean(f_a)+mean(f_b))/2
+a,b,c_i = f_a−m, f_b−m, f_ab[i]−m
+Vhat    = (mean(a²)+mean(b²))/2
+S_i     = mean(b*c_i)/Vhat
+T_i     = 1−mean(a*c_i)/Vhat.
 ```
 
-since the two outputs are i.i.d. conditionally on `X_{~i}` and the
-conditional variance given `X_{~i}` averages to `V_{~i}`. Subtracting
-`f0_hat^2` and dividing by `V_hat` turns these into the estimators
-above. `V_hat` carries an `O(1/n)` bias from the estimated mean; the
-bootstrap described next captures the resulting estimator spread
-empirically.
+One COMMON mean is used, including for crossed outputs. Its numerical
+evaluation uses `origin=f_a[0]`, shifted A/B means and a shifted mean
+correction; all centered arrays subtract that same origin/correction.
+This avoids both raw second-moment cancellation and unnecessary rounding
+of a large reconstructed pooled mean. The returned mean is a scalar in
+the original output units; variance has squared output units and indices
+are dimensionless. Nonrepresentable moments raise FloatingPointError.
 
-**Bootstrap uncertainty.** The `n` design rows are resampled with
-replacement (jointly for `f_a`, `f_b`, `f_ab[i]`), and the *same*
-estimators (including recomputation of `f0_hat` and `V_hat` on the
-resampled rows) are applied to each replicate. The bootstrap standard
-error is the replicate standard deviation (ddof = 1) and the 95%
-confidence interval the 2.5% / 97.5% percentiles. Monte Carlo standard
-errors shrink like `n^(-1/2)`: doubling the base sample size shrinks
-the index standard error by roughly `sqrt(2)`.
+**Affine invariance.** For f'=αf+β with α nonzero, centered outputs scale
+by α; variance and every covariance scale by α². The index ratios thus
+remain unchanged. The prior raw-product-minus-squared-mean calculation
+had offset-dependent finite-sample terms and severe cancellation. This
+is a revised finite-sample estimator, not merely a cosmetic rearrangement
+of those old sample products. Tests cover positive/negative rescaling,
+offsets through 1e8 and exact small integer variation at offset 2^40.
+Variation already rounded away before the function is called cannot be
+recovered. Constant/under-resolved variance raises ValueError.
+
+The population identities are exact, but using estimated moments and
+taking ratios introduces finite-sample bias; no unbiasedness claim or
+clipping to [0,1] is made. A small negative estimate near a true zero is
+an ordinary finite-sample outcome. The Monte Carlo design uses independent
+uniform samples, not a low-discrepancy Sobol sequence.
+
+**Bootstrap.** Jointly resample the design row indices with replacement
+for every output family. Call the same centered estimator, recomputing
+the common center and variance for each replicate. Standard errors use
+replicate ddof=1; percentile intervals use the 2.5% and 97.5% quantiles.
+Zero-variance replicates are skipped; fewer than two valid replicates
+raises an error rather than returning an undefined standard error.
+Bootstrap SE measures spread, not model error or bias removal. Displayed
+±2 SE whiskers and the separately saved percentile intervals are distinct
+uncertainty summaries; neither has guaranteed finite-sample 95% coverage.
 
 ## Analytic ground truth 1: the Ishigami function
 
@@ -187,8 +192,7 @@ f_13(x1, x3) = b (x3^4 - pi^4/5) sin(x1)
             = 8 b^2 pi^8 / 225.
 ```
 
-(Algebraic check of the decomposition identity, exact in floating
-point: `(1/2)(1+c)^2 + a^2/8 + 8 b^2 pi^8 / 225` with `c = b pi^4/5`
+(Algebraic decomposition identity, checked within floating-point roundoff: `(1/2)(1+c)^2 + a^2/8 + 8 b^2 pi^8 / 225` with `c = b pi^4/5`
 equals `1/2 + c + c^2/2 + a^2/8 + 8 b^2 pi^8/225`, and
 `c^2/2 + 8 b^2 pi^8/225 = b^2 pi^8 (1/50 + 8/225) = b^2 pi^8 / 18`,
 recovering `V`.)
