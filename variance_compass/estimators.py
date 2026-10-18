@@ -6,30 +6,19 @@ third-party sensitivity-analysis library is used anywhere.
 
 Estimator definitions
 ---------------------
-Given the Saltelli design outputs ``f_a = f(A)``, ``f_b = f(B)`` and
-``f_ab[i] = f(A_B^(i))`` (each of length ``n``), where the crossed
-matrix ``A_B^(i)`` is ``A`` with its ``i``-th column replaced by the
-``i``-th column of ``B``, define the symmetric moment estimates
+For the Saltelli crossed design, center EVERY output family at the same
+pooled A/B mean m. Let a=f(A)-m, b=f(B)-m, c_i=f(A_B^(i))-m.
 
-    f0   = (mean(f_a) + mean(f_b)) / 2
-    Vhat = (mean(f_a**2) + mean(f_b**2)) / 2 - f0**2
+    Vhat = (mean(a*a) + mean(b*b))/2
+    S_i  = mean(b*c_i)/Vhat
+    T_i  = 1 - mean(a*c_i)/Vhat
 
-Then, with ``.*`` the row-wise dot product over rows ``j = 1..n``,
-
-    S_hat_i = ( f_b .* f_ab[i] / n - f0**2 ) / Vhat
-    T_hat_i = 1 - ( f_a .* f_ab[i] / n - f0**2 ) / Vhat
-
-These follow from the expectation identities
-
-    E[f(B_j) * f(A_B^(i)_j)] = f0**2 + V_i
-    E[f(A_j) * f(A_B^(i)_j)] = f0**2 + V - V_i_total
-
-because ``f(B_j)`` and ``f(A_B^(i)_j)`` share exactly the input ``X_i``
-(the transplanted ``B`` column), while ``f(A_j)`` and ``f(A_B^(i)_j)``
-share every input *except* ``X_i``; all remaining inputs are
-independent copies.  ``Vhat`` carries an ``O(1/n)`` bias from the
-estimated mean; the bootstrap in :mod:`variance_compass.sensitivity`
-captures the resulting estimator spread empirically.
+At the population mean these covariance identities equal V_i/V and
+1-(V-V_total_i)/V. Using an estimated common mean gives a consistent,
+finite-sample biased estimator; estimates are not clipped to [0,1].
+A shifted-origin calculation avoids subtracting two large raw moments.
+Every bootstrap replicate calls this same estimator with its own pooled
+mean. See docs/model.md for the derivation and translation invariance.
 """
 
 from __future__ import annotations
@@ -61,7 +50,11 @@ def _as_1d_float(x, name):
 def sample_mean(x):
     """Unbiased sample mean, written out explicitly (tested against numpy)."""
     arr = _as_1d_float(x, "x")
-    return float(arr.sum() / arr.size)
+    with np.errstate(over="ignore", invalid="ignore"):
+        mean = float(arr[0] + np.mean(arr-arr[0]))
+    if not np.isfinite(mean):
+        raise FloatingPointError("sample mean is not representable; rescale outputs")
+    return mean
 
 
 def sample_variance(x, ddof=1):
@@ -72,8 +65,13 @@ def sample_variance(x, ddof=1):
     ddof = int(ddof)
     if arr.size - ddof <= 0:
         raise ValueError(f"sample size {arr.size} is too small for ddof={ddof}")
-    centered = arr - arr.sum() / arr.size
-    return float(centered @ centered / (arr.size - ddof))
+    with np.errstate(over="ignore", invalid="ignore"):
+        shifted = arr-arr[0]
+        centered = shifted-shifted.mean()
+        variance = float(centered @ centered / (arr.size-ddof))
+    if not np.isfinite(variance):
+        raise FloatingPointError("sample variance is not representable; rescale outputs")
+    return variance
 
 
 def _design_outputs(f_a, f_b, f_ab):
@@ -84,6 +82,8 @@ def _design_outputs(f_a, f_b, f_ab):
         raise ValueError(
             f"f_ab must be a 2-D array of shape (dim, n), got shape {fab.shape}"
         )
+    if fab.shape[0] == 0:
+        raise ValueError("f_ab must include at least one input dimension")
     if fab.shape[1] != fa.size or fab.shape[1] != fb.size:
         raise ValueError("f_a, f_b and f_ab must share the same sample size n")
     if not np.all(np.isfinite(fab)):
@@ -91,49 +91,49 @@ def _design_outputs(f_a, f_b, f_ab):
     return fa, fb, fab
 
 
-def _design_moments(fa, fb):
-    f0 = 0.5 * (fa.mean() + fb.mean())
-    variance = 0.5 * (np.mean(fa * fa) + np.mean(fb * fb)) - f0 * f0
-    if variance <= 0.0:
-        raise ValueError(
-            "estimated output variance is not positive; the model output looks constant"
-        )
-    return f0, variance
+class _ZeroVarianceError(ValueError):
+    """A constant/under-resolved replicate, distinguishable from malformed input."""
+
+
+def _centered_design(fa, fb, fab):
+    # Subtract a reference before estimating the pooled mean. This keeps
+    # small variations resolved when a large common offset is present.
+    with np.errstate(over="ignore", invalid="ignore"):
+        origin = fa[0]
+        da, db = fa-origin, fb-origin
+        shift = 0.5*(da.mean()+db.mean())
+        a, b, c = da-shift, db-shift, (fab-origin)-shift
+        variance = 0.5*(np.mean(a*a)+np.mean(b*b))
+        mean = float(origin+shift)
+    if not np.isfinite(variance) or not np.isfinite(mean) or not np.all(np.isfinite(c)):
+        raise FloatingPointError("design moments are not representable; rescale outputs")
+    if variance <= 0:
+        raise _ZeroVarianceError("estimated output variance is not positive; the model output looks constant")
+    return a, b, c, mean, float(variance)
 
 
 def first_order_indices(f_a, f_b, f_ab):
-    """Saltelli first-order estimates ``S_hat`` as an array of length ``dim``."""
-    fa, fb, fab = _design_outputs(f_a, f_b, f_ab)
-    f0, variance = _design_moments(fa, fb)
-    n = fa.size
-    return (fab @ fb / n - f0 * f0) / variance
+    """Common-centered first-order covariance estimates, length dim."""
+    return saltelli_indices(f_a, f_b, f_ab)[0]
 
 
 def total_effect_indices(f_a, f_b, f_ab):
-    """Saltelli total-effect estimates ``T_hat`` as an array of length ``dim``."""
-    fa, fb, fab = _design_outputs(f_a, f_b, f_ab)
-    f0, variance = _design_moments(fa, fb)
-    n = fa.size
-    return 1.0 - (fab @ fa / n - f0 * f0) / variance
+    """Common-centered total-effect covariance estimates, length dim."""
+    return saltelli_indices(f_a, f_b, f_ab)[1]
 
 
 def saltelli_indices(f_a, f_b, f_ab):
-    """Compute both index families plus the design moments in one pass.
+    """Return (S, T, pooled mean, pooled population variance).
 
-    Returns
-    -------
-    S : numpy.ndarray, shape ``(dim,)``
-        First-order index estimates.
-    T : numpy.ndarray, shape ``(dim,)``
-        Total-effect index estimates.
-    mean : float
-        Pooled mean estimate ``f0``.
-    variance : float
-        Symmetric variance estimate ``Vhat``.
+    Uses one common A/B center for all three output families. Additive
+    offsets cancel; a nonzero output scaling cancels between covariance
+    and variance, up to rounding already present in the supplied outputs.
     """
     fa, fb, fab = _design_outputs(f_a, f_b, f_ab)
-    f0, variance = _design_moments(fa, fb)
-    n = fa.size
-    S = (fab @ fb / n - f0 * f0) / variance
-    T = 1.0 - (fab @ fa / n - f0 * f0) / variance
-    return S, T, float(f0), float(variance)
+    a, b, c, mean, variance = _centered_design(fa, fb, fab)
+    with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
+        S = (c @ b / fa.size) / variance
+        T = 1-(c @ a / fa.size) / variance
+    if not np.all(np.isfinite(S)) or not np.all(np.isfinite(T)):
+        raise FloatingPointError("indices are not representable; rescale outputs")
+    return S, T, mean, variance

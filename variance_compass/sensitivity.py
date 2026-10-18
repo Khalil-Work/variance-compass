@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .estimators import saltelli_indices
+from .estimators import saltelli_indices, _ZeroVarianceError
 from .sampling import saltelli_matrices, to_physical
 from .validation import (
     validate_bounds,
@@ -143,7 +143,9 @@ def _bootstrap_indices(f_a, f_b, f_ab, n_boot, rng):
     Resamples the ``n`` design rows with replacement (jointly for all
     ``f_a``, ``f_b``, ``f_ab`` outputs) and recomputes the indices for
     each replicate.  Degenerate replicates with non-positive variance
-    are recorded as NaN and skipped by the nan-aware statistics.
+    are recorded as NaN and skipped by the nan-aware statistics. At least
+    two valid replicates are required for a finite ddof=1 standard error.
+    Each replicate reuses the same common-centered public estimator.
     """
     n = f_a.size
     k = f_ab.shape[0]
@@ -154,14 +156,12 @@ def _bootstrap_indices(f_a, f_b, f_ab, n_boot, rng):
         fa = f_a[idx]
         fb = f_b[idx]
         fab = f_ab[:, idx]
-        f0 = 0.5 * (fa.mean() + fb.mean())
-        var = 0.5 * (np.mean(fa * fa) + np.mean(fb * fb)) - f0 * f0
-        if var <= 0.0:
+        try:
+            S_b[b], T_b[b], _, _ = saltelli_indices(fa, fb, fab)
+        except _ZeroVarianceError:
             continue
-        S_b[b] = (fab @ fb / n - f0 * f0) / var
-        T_b[b] = 1.0 - (fab @ fa / n - f0 * f0) / var
-    if np.all(np.isnan(S_b)):
-        raise ValueError("all bootstrap replicates were degenerate")
+    if np.count_nonzero(np.all(np.isfinite(S_b), axis=1)) < 2:
+        raise ValueError("at least two nondegenerate bootstrap replicates are required")
     S_se = np.nanstd(S_b, axis=0, ddof=1)
     T_se = np.nanstd(T_b, axis=0, ddof=1)
     S_ci = np.nanpercentile(S_b, [2.5, 97.5], axis=0).T

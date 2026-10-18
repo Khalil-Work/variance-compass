@@ -1,17 +1,9 @@
-"""Core statistical verification: Saltelli estimates vs the analytic
-Ishigami ground truth under a fixed seed.
+"""Fixed-seed covariance estimates vs analytic Ishigami indices.
 
-Tolerance rationale (see docs/verification.md for the full discussion):
-
-* At N = 2**17 the bootstrap standard error of any S_i or T_i is about
-  0.0044, so 3*SE ~ 0.013; TOL_INDEX = 0.02 therefore allows > 3 sigma
-  of estimator spread and is a statistical, not cosmetic, bound.
-* Over 12 independent seeds (101..112) at N = 2**15 the largest observed
-  index error was 0.0217; scaling that spread by sqrt(2**15 / 2**17) ~ 0.5
-  gives ~0.011 at the test's N, again inside 0.02.
-* The suite is deterministic: the seed fixes every random draw, so the
-  observed errors are exact properties of this test, reported in
-  docs/results/run_summary.json.
+The 0.02 allowances exceed three bootstrap standard errors on the
+documented N=2**17 fixture. Exact current measurements are reproduced by
+examples/run_verification.py and saved in run_summary.json; they are not
+universal coverage or unbiasedness claims.
 """
 
 import numpy as np
@@ -49,13 +41,13 @@ def analytic():
 def test_first_order_indices_match_analytic(result, analytic):
     errors = np.abs(result.S - np.array(analytic.S))
     assert np.all(errors <= TOL_INDEX)
-    assert errors.max() < 0.006  # observed: 0.0053 (deterministic for the seed)
+    assert errors.max() < 0.006  # observed centered max: 0.0031
 
 
 def test_total_effect_indices_match_analytic(result, analytic):
     errors = np.abs(result.T - np.array(analytic.T))
     assert np.all(errors <= TOL_INDEX)
-    assert errors.max() < 0.007  # observed: 0.0060 (deterministic for the seed)
+    assert errors.max() < 0.007  # observed centered max: 0.0035
 
 
 def test_bootstrap_se_supports_the_stated_tolerance(result):
