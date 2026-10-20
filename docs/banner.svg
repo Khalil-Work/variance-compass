@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-label="Variance Compass banner">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1d33"/>
+      <stop offset="1" stop-color="#081221"/>
+    </linearGradient>
+    <linearGradient id="v1" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#4fc3f7"/><stop offset="1" stop-color="#4fc3f7" stop-opacity="0.15"/>
+    </linearGradient>
+    <linearGradient id="v2" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#e8b04b"/><stop offset="1" stop-color="#e8b04b" stop-opacity="0.15"/>
+    </linearGradient>
+    <linearGradient id="v3" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#7ed491"/><stop offset="1" stop-color="#7ed491" stop-opacity="0.15"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="300" fill="url(#bg)"/>
+  <!-- variance decomposition bars: S vs T per input -->
+  <g transform="translate(80,45)">
+    <!-- axes -->
+    <line x1="30" y1="190" x2="480" y2="190" stroke="#5b7a99" stroke-width="2"/>
+    <line x1="30" y1="190" x2="30" y2="15" stroke="#5b7a99" stroke-width="2"/>
+    <!-- x1: S=0.31 T=0.56 -->
+    <rect x="70" y="97" width="44" height="93" fill="url(#v1)" stroke="#4fc3f7" stroke-width="1.5"/>
+    <rect x="120" y="27" width="44" height="163" fill="url(#v2)" stroke="#e8b04b" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <!-- x2: S=0.44 T=0.44 -->
+    <rect x="210" y="62" width="44" height="128" fill="url(#v1)" stroke="#4fc3f7" stroke-width="1.5"/>
+    <rect x="260" y="62" width="44" height="128" fill="url(#v2)" stroke="#e8b04b" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <!-- x3: S=0 T=0.24 (interaction only) -->
+    <rect x="350" y="188" width="44" height="2" fill="#4fc3f7"/>
+    <rect x="400" y="120" width="44" height="70" fill="url(#v3)" stroke="#7ed491" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <text x="60" y="215" fill="#9fb8ce" font-family="Segoe UI, Arial, sans-serif" font-size="17">x₁</text>
+    <text x="200" y="215" fill="#9fb8ce" font-family="Segoe UI, Arial, sans-serif" font-size="17">x₂</text>
+    <text x="340" y="215" fill="#9fb8ce" font-family="Segoe UI, Arial, sans-serif" font-size="17">x₃</text>
+    <text x="380" y="112" fill="#7ed491" font-family="Consolas, monospace" font-size="14">interaction</text>
+    <text x="380" y="130" fill="#7ed491" font-family="Consolas, monospace" font-size="14">only</text>
+    <text x="36" y="12" fill="#9fb8ce" font-family="Consolas, monospace" font-size="15">S ▪ first-order   T ▨ total</text>
+  </g>
+  <!-- wordmark -->
+  <g font-family="Segoe UI, Arial, sans-serif">
+    <text x="620" y="120" fill="#ffffff" font-size="58" font-weight="800" letter-spacing="1">Variance <tspan fill="#e8b04b">Compass</tspan></text>
+    <text x="622" y="163" fill="#9fb8ce" font-size="21">global sensitivity analysis · Sobol' indices · bootstrap</text>
+    <text x="622" y="201" fill="#5b7a99" font-family="Consolas, monospace" font-size="15">Saltelli designs · centered estimators · analytic anchors</text>
+  </g>
+</svg>
