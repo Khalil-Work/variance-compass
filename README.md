@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/banner.svg" alt="Variance Compass banner: first-order S and total-effect T bars for three inputs showing an interaction-only input" width="100%">
+<img src="docs/banner.png" alt="Variance Compass banner: first-order S and total-effect T bars for three inputs showing an interaction-only input" width="100%">
 
 # 🧭 Variance Compass
 
