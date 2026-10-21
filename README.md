@@ -10,13 +10,13 @@
 covariance estimators, row-bootstrap uncertainty and analytic Ishigami/additive
 benchmarks. No sensitivity-analysis library.**
 
-[![tests](https://github.com/khalil-official/variance-compass/actions/workflows/ci.yml/badge.svg)](https://github.com/khalil-official/variance-compass/actions/workflows/ci.yml)
+[![tests](https://github.com/khalil-work/variance-compass/actions/workflows/ci.yml/badge.svg)](https://github.com/khalil-work/variance-compass/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![python](https://img.shields.io/badge/python-3.12-blue.svg)](requirements.txt)
 [![tests](https://img.shields.io/badge/tests-88%20passing-brightgreen.svg)](tests)
 [![deps](https://img.shields.io/badge/deps-NumPy%20only-9cf.svg)](requirements.txt)
-[![repo stars](https://img.shields.io/github/stars/khalil-official/variance-compass?style=flat&color=yellow)](https://github.com/khalil-official/variance-compass/stargazers)
-[![last commit](https://img.shields.io/github/last-commit/khalil-official/variance-compass?color=9cf)](https://github.com/khalil-official/variance-compass/commits)
+[![repo stars](https://img.shields.io/github/stars/khalil-work/variance-compass?style=flat&color=yellow)](https://github.com/khalil-work/variance-compass/stargazers)
+[![last commit](https://img.shields.io/github/last-commit/khalil-work/variance-compass?color=9cf)](https://github.com/khalil-work/variance-compass/commits)
 
 [Quick start](#-install-and-reproduce) · [Estimator](#-the-estimator-and-why-centering-matters) · [Animation](#%EF%B8%8F-results-gallery) · [Benchmarks](#-recorded-benchmark-results) · [References](#-references-and-license)
 
@@ -76,7 +76,7 @@ flowchart LR
 ## ⚡ Install and reproduce
 
 ```bash
-git clone https://github.com/khalil-official/variance-compass.git
+git clone https://github.com/khalil-work/variance-compass.git
 cd variance-compass
 python -m venv .venv
 # Windows: .venv\Scripts\activate
