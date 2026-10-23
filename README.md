@@ -18,7 +18,7 @@ benchmarks. No sensitivity-analysis library.**
 [![repo stars](https://img.shields.io/github/stars/khalil-work/variance-compass?style=flat&color=yellow)](https://github.com/khalil-work/variance-compass/stargazers)
 [![last commit](https://img.shields.io/github/last-commit/khalil-work/variance-compass?color=9cf)](https://github.com/khalil-work/variance-compass/commits)
 
-[Quick start](#-install-and-reproduce) · [Estimator](#-the-estimator-and-why-centering-matters) · [Animation](#%EF%B8%8F-results-gallery) · [Benchmarks](#-recorded-benchmark-results) · [References](#-references-and-license)
+[Homepage](https://khalil-work.github.io) · [Quick start](#-install-and-reproduce) · [Estimator](#-the-estimator-and-why-centering-matters) · [Animation](#%EF%B8%8F-results-gallery) · [Benchmarks](#-recorded-benchmark-results) · [References](#-references-and-license)
 
 </div>
 
